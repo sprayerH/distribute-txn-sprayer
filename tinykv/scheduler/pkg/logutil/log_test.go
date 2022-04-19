@@ -15,6 +15,7 @@ package logutil
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 
