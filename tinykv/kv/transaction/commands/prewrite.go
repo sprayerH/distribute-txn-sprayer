@@ -70,17 +70,61 @@ func (p *Prewrite) prewriteMutation(txn *mvcc.MvccTxn, mut *kvrpcpb.Mutation) (*
 	// Hint: Check the interafaces provided by `mvcc.MvccTxn`. The error type `kvrpcpb.WriteConflict` is used
 	//		 denote to write conflict error, try to set error information properly in the `kvrpcpb.KeyError`
 	//		 response.
-	panic("prewriteMutation is not implemented yet")
+	//panic("prewriteMutation is not implemented yet")
+	write, ts, err := txn.MostRecentWrite(key)
+	if err != nil {
+		return nil, err
+	}
+	if write != nil && ts > txn.StartTS {
+		return &kvrpcpb.KeyError{
+			Conflict: &kvrpcpb.WriteConflict{
+				StartTs:    txn.StartTS,
+				ConflictTs: ts,
+				Key:        key,
+				Primary:    p.request.PrimaryLock,
+			}}, nil
+	}
 
 	// YOUR CODE HERE (lab1).
 	// Check if key is locked. Report key is locked error if lock does exist, note the key could be locked
 	// by this transaction already and the current prewrite request is stale.
-	panic("check lock in prewrite is not implemented yet")
+	//panic("check lock in prewrite is not implemented yet")
+
+	lock, err := txn.GetLock(key)
+	if err != nil {
+		return nil, err
+	}
+	// locked and not locked by itself
+	if lock != nil && lock.Ts != txn.StartTS {
+		return &kvrpcpb.KeyError{
+			Locked: &kvrpcpb.LockInfo{
+				PrimaryLock: lock.Primary,
+				LockVersion: lock.Ts,
+				Key:         key,
+				LockTtl:     lock.Ttl,
+			}}, nil
+	}
 
 	// YOUR CODE HERE (lab1).
 	// Write a lock and value.
 	// Hint: Check the interfaces provided by `mvccTxn.Txn`.
-	panic("lock record generation is not implemented yet")
+	//panic("lock record generation is not implemented yet")
+	var kind mvcc.WriteKind
+	switch mut.Op {
+	case kvrpcpb.Op_Put:
+		kind = mvcc.WriteKindPut
+		txn.PutValue(mut.Key, mut.Value)
+	case kvrpcpb.Op_Del:
+		kind = mvcc.WriteKindDelete
+		txn.DeleteValue(mut.Key)
+	default:
+		panic("Invalid op")
+	}
+	txn.PutLock(mut.Key, &mvcc.Lock{
+		Primary: p.request.PrimaryLock,
+		Ts:      txn.StartTS,
+		Ttl:     p.request.LockTtl,
+		Kind:    kind})
 
 	return nil, nil
 }
