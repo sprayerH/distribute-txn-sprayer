@@ -40,7 +40,7 @@ func (g *Get) Read(txn *mvcc.RoTxn) (interface{}, [][]byte, error) {
 		return nil, nil, err
 	}
 
-	if lock != nil && lock.Ts < txn.StartTS {
+	if lock != nil && lock.Ts <= txn.StartTS {
 		response.Error = &kvrpcpb.KeyError{
 			Locked: &kvrpcpb.LockInfo{
 				PrimaryLock: lock.Primary,

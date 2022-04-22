@@ -35,7 +35,7 @@ func (c *Commit) PrepareWrites(txn *mvcc.MvccTxn) (interface{}, error) {
 	if commitTs <= c.startTs {
 		panic("unexpected error")
 	}
-	
+
 	response := new(kvrpcpb.CommitResponse)
 
 	// Commit each key.
@@ -65,6 +65,35 @@ func commitKey(key []byte, commitTs uint64, txn *mvcc.MvccTxn, response interfac
 		// Key is locked by a different transaction, or there is no lock on the key. It's needed to
 		// check the commit/rollback record for this key, if nothing is found report lock not found
 		// error. Also the commit request could be stale that it's already committed or rolled back.
+
+		// check the write
+		write, recordCommitTS, err := txn.CurrentWrite(key)
+		if err != nil {
+			return nil, err
+		}
+		if write != nil {
+			if write.Kind == mvcc.WriteKindRollback {
+				log.Warn("the transaction is already rolled back",
+					zap.Uint64("startTS", txn.StartTS),
+					zap.String("key", hex.EncodeToString(key)))
+				if recordCommitTS != write.StartTS {
+					log.Fatal("unexpected write record the start and commit ts for a rollback record"+
+						"should be the same", zap.Uint64("startTS", txn.StartTS),
+						zap.Uint64("recordCommitTS", recordCommitTS),
+						zap.String("key", hex.EncodeToString(key)))
+				}
+				respValue := reflect.ValueOf(response)
+				keyError := &kvrpcpb.KeyError{Retryable: fmt.Sprintf("the key %v is already rolled back", key)}
+				reflect.Indirect(respValue).FieldByName("Error").Set(reflect.ValueOf(keyError))
+				return response, nil
+			} else {
+				log.Debug("the transaction is already committed",
+					zap.Uint64("startTS", txn.StartTS),
+					zap.String("key", hex.EncodeToString(key)),
+					zap.Uint64("commitTS", recordCommitTS))
+				return nil, nil
+			}
+		}
 
 		respValue := reflect.ValueOf(response)
 		keyError := &kvrpcpb.KeyError{Retryable: fmt.Sprintf("lock not found for key %v", key)}

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"encoding/hex"
+
 	"github.com/pingcap-incubator/tinykv/kv/transaction/mvcc"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/kvrpcpb"
 	"github.com/pingcap/log"
@@ -34,11 +35,23 @@ func (rl *ResolveLock) PrepareWrites(txn *mvcc.MvccTxn) (interface{}, error) {
 		zap.Uint64("lockTS", txn.StartTS),
 		zap.Int("number", len(rl.keyLocks)),
 		zap.Uint64("commit_ts", commitTs))
-	panic("ResolveLock is not implemented yet")
+	//panic("ResolveLock is not implemented yet")
 	for _, kl := range rl.keyLocks {
 		// YOUR CODE HERE (lab1).
 		// Try to commit the key if the transaction is committed already, or try to rollback the key if it's not.
 		// The `commitKey` and `rollbackKey` functions could be useful.
+		// check if the
+		if commitTs == 0 {
+			resp, err := rollbackKey(kl.Key, txn, response)
+			if resp != nil || err != nil {
+				return resp, err
+			}
+		} else {
+			resp, err := commitKey(kl.Key, commitTs, txn, response)
+			if resp != nil || err != nil {
+				return resp, err
+			}
+		}
 		log.Debug("resolve key", zap.String("key", hex.EncodeToString(kl.Key)))
 	}
 

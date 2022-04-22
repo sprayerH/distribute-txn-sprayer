@@ -75,7 +75,8 @@ func (p *Prewrite) prewriteMutation(txn *mvcc.MvccTxn, mut *kvrpcpb.Mutation) (*
 	if err != nil {
 		return nil, err
 	}
-	if write != nil && ts > txn.StartTS {
+	// must check >= instead of >. because  write conflict happened
+	if write != nil && ts >= txn.StartTS {
 		return &kvrpcpb.KeyError{
 			Conflict: &kvrpcpb.WriteConflict{
 				StartTs:    txn.StartTS,
